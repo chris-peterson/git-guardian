@@ -2,7 +2,7 @@
 
 A Claude Code plugin that enforces git safety rules as a `PreToolUse` hook.
 
-Claude Code's built-in permission system uses naive string matching that [fails for compound commands, heredocs, and flag reordering](https://github.com/anthropics/claude-code/issues/30519). A deny rule on `git push --force` won't catch `git push -f`. A deny rule on `git commit` won't fire when the command is `git add . && git commit -m "oops"`.
+Claude Code's built-in permission system uses naive string matching that [fails for compound commands, heredocs, and flag reordering](https://github.com/anthropics/claude-code/issues/30519). A block rule on `git push --force` won't catch `git push -f`. A block rule on `git commit` won't fire when the command is `git add . && git commit -m "oops"`.
 
 A [security report](https://github.com/anthropics/claude-code/issues/13371) demonstrated complete bypass via command chaining and option insertion. The [meta-issue](https://github.com/anthropics/claude-code/issues/30519) tracks 30+ open bugs.
 
@@ -79,9 +79,9 @@ Rules are defined in `rules.yml`. Each rule has a `pattern` (Python regex matche
 
 ```yaml
 rules:
-  deny:
+  block:
     - pattern: 'git\s+push\s.*(--force|-[a-zA-Z]*f\b)'
-      reason: rewrites remote history
+      reason: overwrites shared remote history
       ref: https://git-scm.com/docs/git-push#Documentation/git-push.txt--f
     # ...
   ask:
@@ -105,7 +105,7 @@ The key advantage: Python's `re.search()` matches anywhere in the command string
 
 ## References
 
-- [Claude Code committed code despite explicit deny](https://github.com/anthropics/claude-code/issues/27040#issuecomment-4028746897) — firsthand incident report: deny rules in `settings.json` silently failed on a `git commit` with heredoc syntax, with two independent safeguards (deny rule + skill instruction) both bypassed
+- [Claude Code committed code despite explicit deny](https://github.com/anthropics/claude-code/issues/27040#issuecomment-4028746897) — firsthand incident report: block rules in `settings.json` silently failed on a `git commit` with heredoc syntax, with two independent safeguards (block rule + skill instruction) both bypassed
 - [Permission system meta-issue](https://github.com/anthropics/claude-code/issues/30519) — tracks 30+ open bugs in Claude Code's built-in permission matching
 - [Security bypass report](https://github.com/anthropics/claude-code/issues/13371) — demonstrated complete bypass via command chaining and option insertion
 

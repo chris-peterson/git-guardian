@@ -1,5 +1,5 @@
 rules:
-  deny:
+  block:
     - pattern: 'git\s+push\s.*(--force|-[a-zA-Z]*f\b)'
       reason: overwrites shared remote history
       ref: https://git-scm.com/docs/git-push#Documentation/git-push.txt--f

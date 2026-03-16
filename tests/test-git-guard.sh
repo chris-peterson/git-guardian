@@ -42,47 +42,47 @@ run_test() {
 
 echo "=== git-guardian tests ==="
 
-# deny: push\s.*(--force|-[a-zA-Z]*f\b)
-echo "--- deny: force push ---"
+# block:push\s.*(--force|-[a-zA-Z]*f\b)
+echo "--- block: force push ---"
 run_test "--force"             block '{"tool_name":"Bash","tool_input":{"command":"git push --force origin main"}}'
 run_test "--force-with-lease"  block '{"tool_name":"Bash","tool_input":{"command":"git push --force-with-lease origin feature"}}'
 run_test "-f"                  block '{"tool_name":"Bash","tool_input":{"command":"git push -f origin feature"}}'
 
-# deny: reset\s.*--hard
-echo "--- deny: reset --hard ---"
+# block:reset\s.*--hard
+echo "--- block: reset --hard ---"
 run_test "--hard"              block '{"tool_name":"Bash","tool_input":{"command":"git reset --hard"}}'
 run_test "--hard HEAD~3"       block '{"tool_name":"Bash","tool_input":{"command":"git reset --hard HEAD~3"}}'
 
-# deny: checkout\s+\.\s*$
-echo "--- deny: checkout . ---"
+# block:checkout\s+\.\s*$
+echo "--- block: checkout . ---"
 run_test "checkout ."          block '{"tool_name":"Bash","tool_input":{"command":"git checkout ."}}'
 
-# deny: checkout\s+--\s
-echo "--- deny: checkout -- ---"
+# block:checkout\s+--\s
+echo "--- block: checkout -- ---"
 run_test "checkout -- file"    block '{"tool_name":"Bash","tool_input":{"command":"git checkout -- src/main.rs"}}'
 
-# deny: restore\s+\.\s*$
-echo "--- deny: restore . ---"
+# block:restore\s+\.\s*$
+echo "--- block: restore . ---"
 run_test "restore ."           block '{"tool_name":"Bash","tool_input":{"command":"git restore ."}}'
 
-# deny: clean\s.*-[a-zA-Z]*f
-echo "--- deny: clean -f ---"
+# block:clean\s.*-[a-zA-Z]*f
+echo "--- block: clean -f ---"
 run_test "-f"                  block '{"tool_name":"Bash","tool_input":{"command":"git clean -f"}}'
 run_test "-xdf"                block '{"tool_name":"Bash","tool_input":{"command":"git clean -xdf"}}'
 run_test "-n (dry run)"        allow '{"tool_name":"Bash","tool_input":{"command":"git clean -n"}}'
 
-# deny: branch\s.*-[a-zA-Z]*D
-echo "--- deny: branch -D ---"
+# block:branch\s.*-[a-zA-Z]*D
+echo "--- block: branch -D ---"
 run_test "-D"                  block '{"tool_name":"Bash","tool_input":{"command":"git branch -D unmerged-feature"}}'
 run_test "-d (lowercase)"      allow '{"tool_name":"Bash","tool_input":{"command":"git branch -d merged-feature"}}'
 
-# deny: stash\s+(drop|clear)
-echo "--- deny: stash drop/clear ---"
+# block:stash\s+(drop|clear)
+echo "--- block: stash drop/clear ---"
 run_test "drop"                block '{"tool_name":"Bash","tool_input":{"command":"git stash drop stash@{0}"}}'
 run_test "clear"               block '{"tool_name":"Bash","tool_input":{"command":"git stash clear"}}'
 
-# deny: reflog\s+(expire|delete)
-echo "--- deny: reflog expire/delete ---"
+# block:reflog\s+(expire|delete)
+echo "--- block: reflog expire/delete ---"
 run_test "expire"              block '{"tool_name":"Bash","tool_input":{"command":"git reflog expire --expire=now --all"}}'
 run_test "delete"              block '{"tool_name":"Bash","tool_input":{"command":"git reflog delete HEAD@{2}"}}'
 

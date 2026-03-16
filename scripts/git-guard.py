@@ -23,7 +23,7 @@ def parse_rules_yml(path):
 
     Handles the specific format used by this plugin:
       rules:
-        deny:
+        block:
           - pattern: '...'
             reason: ...
             ref: ...
@@ -32,7 +32,7 @@ def parse_rules_yml(path):
             reason: ...
             ref: ...
     """
-    rules = {"deny": [], "ask": []}
+    rules = {"block": [], "ask": []}
     current_section = None
     current_item = None
 
@@ -46,7 +46,7 @@ def parse_rules_yml(path):
 
             indent = len(line) - len(line.lstrip())
 
-            if indent == 2 and stripped in ("deny:", "ask:"):
+            if indent == 2 and stripped in ("block:", "ask:"):
                 current_section = stripped[:-1]
                 current_item = None
 
@@ -93,7 +93,7 @@ def main():
         print(json.dumps({"decision": "block", "reason": f"git-guard: failed to load rules: {e}"}, separators=(",", ":")))
         sys.exit(0)
 
-    for rule in rules.get("deny", []):
+    for rule in rules.get("block", []):
         if re.search(rule["pattern"], cmd):
             print(json.dumps({"decision": "block", "reason": _message(rule)}, separators=(",", ":")))
             sys.exit(0)
