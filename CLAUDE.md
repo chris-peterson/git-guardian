@@ -20,9 +20,8 @@ This is a Claude Code plugin that enforces git safety as a `PreToolUse` hook.
 
 - `rules.yml` — the editable rule configuration (deny/ask sections)
 - `scripts/git-guard.py` — the hook implementation; reads `rules.yml`, matches the incoming Bash command against rules, and outputs a JSON decision
-- `scripts/first-run.sh` — `SessionStart` hook; emits a configure invitation on first session (no `~/.claude/.git-guardian-configured` marker)
-- `skills/configure/SKILL.md` — interactive configure skill; invocable as `/git-guardian:configure`
-- `hooks/hooks.json` — wires `PreToolUse` (Bash) and `SessionStart` hooks using `${CLAUDE_PLUGIN_ROOT}`
+- `skills/rules/SKILL.md` — interactive skill for viewing and editing rules; invocable as `/git-guardian:rules`
+- `hooks/hooks.json` — wires `PreToolUse` (Bash) hook using `${CLAUDE_PLUGIN_ROOT}`
 - `.claude-plugin/plugin.json` — plugin manifest
 
 **Hook protocol:** Claude Code passes tool invocations as JSON on stdin. The hook outputs `{"decision":"block",...}`, `{"decision":"ask",...}`, or nothing (allow). Exit code must always be 0.

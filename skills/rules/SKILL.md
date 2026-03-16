@@ -103,10 +103,6 @@ rule caused the failure and offer to fix or revert.
 If any rules were added, note that the test file has no coverage for them yet
 and offer to add test cases.
 
-### 9. Mark configured
-
-`touch ~/.claude/.git-guardian-configured`
-
-### 10. Confirm
+### 9. Confirm
 
 Summarize what changed (or confirm no changes were made).
