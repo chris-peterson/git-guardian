@@ -18,12 +18,15 @@ def load_parser():
     return mod.parse_rules_yml
 
 
-def rule_table(rules):
-    lines = ["| Command | Reason | Ref |", "| --- | --- | --- |"]
-    for r in rules:
-        name = f"`{r.get('name', '')}`" if r.get("name") else ""
-        ref = f"[docs]({r['ref']})" if r["ref"] else ""
-        lines.append(f"| {name} | {r['reason']} | {ref} |")
+def unified_table(rules):
+    lines = ["| | Command | Reason | Ref |", "| --- | --- | --- | --- |"]
+    for section, emoji in [("block", ":no_entry_sign:"), ("ask", ":raised_hand:")]:
+        for r in rules[section]:
+            name = f"`{r.get('name', '')}`" if r.get("name") else ""
+            ref = f"[docs]({r['ref']})" if r["ref"] else ""
+            lines.append(f"| {emoji} | {name} | {r['reason']} | {ref} |")
+    lines.append("")
+    lines.append(":no_entry_sign: = blocked outright &nbsp;&nbsp; :raised_hand: = requires user confirmation")
     return "\n".join(lines)
 
 
@@ -60,23 +63,7 @@ def main():
         "> [!TIP]",
         "> Use the `/git-guardian:rules` skill to interactively customize or extend these rules.",
         "",
-    ]))
-
-    write_file(site_dir, "block.md", "\n".join([
-        "# Block Rules",
-        "",
-        "These commands are **rejected outright** — the agent cannot run them.",
-        "",
-        rule_table(rules["block"]),
-        "",
-    ]))
-
-    write_file(site_dir, "ask.md", "\n".join([
-        "# Ask Rules",
-        "",
-        "These commands **require user confirmation** before the agent can proceed.",
-        "",
-        rule_table(rules["ask"]),
+        unified_table(rules),
         "",
     ]))
 

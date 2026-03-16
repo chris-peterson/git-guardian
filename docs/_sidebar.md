@@ -1,5 +1,3 @@
 - [Home](/)
 - [Default Rules](/rules)
-  - [Block](/block)
-  - [Ask](/ask)
   - [rules.yml](/rules-yml)
