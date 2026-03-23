@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/favicon.svg" alt="ClaudeWatch" width="128" height="128">
+</p>
+
 # ClaudeWatch
 
 A Claude Code plugin that enforces command safety rules via a `PreToolUse` hook.
