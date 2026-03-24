@@ -35,9 +35,9 @@ echo "--- block: cat PEM/key files ---"
 t "cat server.pem"        block '{"tool_name":"Bash","tool_input":{"command":"cat server.pem"}}'
 t "cat private.key"       block '{"tool_name":"Bash","tool_input":{"command":"cat private.key"}}'
 
-echo "--- block: env / printenv ---"
-t "env"                   block '{"tool_name":"Bash","tool_input":{"command":"env"}}'
-t "printenv"              block '{"tool_name":"Bash","tool_input":{"command":"printenv"}}'
+echo "--- ask: env / printenv ---"
+t "env"                   ask   '{"tool_name":"Bash","tool_input":{"command":"env"}}'
+t "printenv"              ask   '{"tool_name":"Bash","tool_input":{"command":"printenv"}}'
 
 echo "--- ask: cat dotfiles ---"
 t "cat ~/.bashrc"         ask   '{"tool_name":"Bash","tool_input":{"command":"cat ~/.bashrc"}}'
