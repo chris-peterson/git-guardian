@@ -4,7 +4,7 @@ filter: '\bgit\b'
 rules:
   block:
     - name: git push --force
-      pattern: 'git\s+push\s.*(--force|-[a-zA-Z]*f\b)'
+      pattern: 'git\s+push\s.*(--force|(?<=\s)-[a-zA-Z]*f\b)'
       reason: overwrites shared remote history
       ref: https://git-scm.com/docs/git-push#Documentation/git-push.txt--f
 
@@ -29,12 +29,12 @@ rules:
       ref: https://git-scm.com/docs/git-restore
 
     - name: git clean -f
-      pattern: 'git\s+clean\s.*-[a-zA-Z]*f'
+      pattern: 'git\s+clean\s.*(?<=\s)-[a-zA-Z]*f'
       reason: deletes untracked files with no recovery
       ref: https://git-scm.com/docs/git-clean#Documentation/git-clean.txt--f
 
     - name: git branch -D
-      pattern: 'git\s+branch\s.*-[a-zA-Z]*D'
+      pattern: 'git\s+branch\s.*(?<=\s)-[a-zA-Z]*D'
       reason: force-deletes branch regardless of merge status
       ref: https://git-scm.com/docs/git-branch#Documentation/git-branch.txt--D
 

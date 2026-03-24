@@ -68,6 +68,7 @@ echo "--- ask: push ---"
 t "push"                ask   '{"tool_name":"Bash","tool_input":{"command":"git push"}}'
 t "push origin"         ask   '{"tool_name":"Bash","tool_input":{"command":"git push origin feature-branch"}}'
 t "push -u"             ask   '{"tool_name":"Bash","tool_input":{"command":"git push -u origin main"}}'
+t "push -u (f in name)" ask  '{"tool_name":"Bash","tool_input":{"command":"git push -u origin x-of-tag"}}'
 
 echo "--- allow: safe operations ---"
 t "status"              allow '{"tool_name":"Bash","tool_input":{"command":"git status"}}'
