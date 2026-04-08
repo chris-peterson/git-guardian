@@ -20,8 +20,8 @@ Each rule set has an optional `filter` regex that short-circuits commands that c
 ## Installation
 
 ```bash
-claude plugin marketplace add https://github.com/chris-peterson/ClaudeWatch
-claude plugin install ClaudeWatch
+claude plugins marketplace add https://github.com/chris-peterson/claude-marketplace
+claude plugins install ClaudeWatch@claude-marketplace
 ```
 
 ## Documentation
