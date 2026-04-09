@@ -87,6 +87,9 @@ def parse_rules_yml(path):
             elif indent == 6 and stripped.startswith("ref:") and current_item is not None:
                 current_item["ref"] = _unquote(stripped[4:].strip())
 
+            elif indent == 6 and stripped.startswith("except:") and current_item is not None:
+                current_item["except"] = _unquote(stripped[7:].strip())
+
     return result
 
 
@@ -124,6 +127,8 @@ def evaluate_rules(config, cmd):
         if not rule.get("pattern"):
             _block(f"{label} — rule {rule.get('name', '?')!r} has empty pattern")
             continue
+        if rule.get("except"):
+            print(f"warning: {label} — rule {rule.get('name', '?')!r} has 'except' on a block rule (ignored — except only applies to ask rules)", file=sys.stderr)
         try:
             if re.search(rule["pattern"], cmd):
                 _block(_message(label, rule))
@@ -136,6 +141,13 @@ def evaluate_rules(config, cmd):
             continue
         try:
             if re.search(rule["pattern"], cmd):
+                exc = rule.get("except")
+                if exc:
+                    try:
+                        if re.search(exc, cmd):
+                            continue
+                    except re.error:
+                        pass
                 asks.append(_message(label, rule))
         except re.error as e:
             _block(f"{label} — rule {rule.get('name', '?')!r} has invalid regex: {e}")
