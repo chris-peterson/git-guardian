@@ -28,6 +28,8 @@ claude plugin install ClaudeWatch@chris-peterson
 
 See the [docs site](https://chris-peterson.github.io/ClaudeWatch/) for usage, configuration, and the full [default rules](https://chris-peterson.github.io/ClaudeWatch/#/rules) reference.
 
+In-session, run `/ClaudeWatch:help` for an overview or `/ClaudeWatch:rules` to view and edit rules interactively.
+
 ## Development
 
 ```bash
