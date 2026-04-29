@@ -82,6 +82,35 @@ t "checkout -b"         allow '{"tool_name":"Bash","tool_input":{"command":"git 
 t "mv"                  allow '{"tool_name":"Bash","tool_input":{"command":"git mv old.md new.md"}}'
 t "log | head"          allow '{"tool_name":"Bash","tool_input":{"command":"git log --oneline | head -5"}}'
 
+echo "--- block: with git global flags between git and subcommand ---"
+t "-C path push --force-with-lease"   block '{"tool_name":"Bash","tool_input":{"command":"git -C /tmp/repo push --force-with-lease"}}'
+t "-c key=val push -f"                block '{"tool_name":"Bash","tool_input":{"command":"git -c user.name=x push -f origin main"}}'
+t "--git-dir=PATH push --force"       block '{"tool_name":"Bash","tool_input":{"command":"git --git-dir=/tmp/repo/.git push --force origin main"}}'
+t "--git-dir PATH push --force"       block '{"tool_name":"Bash","tool_input":{"command":"git --git-dir /tmp/repo/.git push --force origin main"}}'
+t "-P push --force"                   block '{"tool_name":"Bash","tool_input":{"command":"git -P push --force origin main"}}'
+t "-C path reset --hard"              block '{"tool_name":"Bash","tool_input":{"command":"git -C /tmp/repo reset --hard"}}'
+t "-C path clean -f"                  block '{"tool_name":"Bash","tool_input":{"command":"git -C /tmp/repo clean -f"}}'
+t "-C path branch -D"                 block '{"tool_name":"Bash","tool_input":{"command":"git -C /tmp/repo branch -D feature"}}'
+t "-C path checkout ."                block '{"tool_name":"Bash","tool_input":{"command":"git -C /tmp/repo checkout ."}}'
+t "-C path checkout -- file"          block '{"tool_name":"Bash","tool_input":{"command":"git -C /tmp/repo checkout -- src/main.rs"}}'
+t "-C path restore ."                 block '{"tool_name":"Bash","tool_input":{"command":"git -C /tmp/repo restore ."}}'
+t "-C path stash drop"                block '{"tool_name":"Bash","tool_input":{"command":"git -C /tmp/repo stash drop"}}'
+t "-C path reflog expire"             block '{"tool_name":"Bash","tool_input":{"command":"git -C /tmp/repo reflog expire --all"}}'
+
+echo "--- block: quoted values containing spaces ---"
+t '-C "/path with spaces" push -f'    block '{"tool_name":"Bash","tool_input":{"command":"git -C \"/tmp/has space\" push --force"}}'
+t "-C '/path with spaces' push -f"    block '{"tool_name":"Bash","tool_input":{"command":"git -C '"'"'/tmp/has space'"'"' push --force-with-lease"}}'
+t '-c "key=val w/ space" push -f'     block '{"tool_name":"Bash","tool_input":{"command":"git -c \"http.extraHeader=Authorization x\" push --force"}}'
+t '-C "/with space" reset --hard'     block '{"tool_name":"Bash","tool_input":{"command":"git -C \"/tmp/has space\" reset --hard"}}'
+
+echo "--- ask: with git global flags between git and subcommand ---"
+t "-C path push"                      ask   '{"tool_name":"Bash","tool_input":{"command":"git -C /tmp/repo push"}}'
+t "-C path commit -m x"               ask   '{"tool_name":"Bash","tool_input":{"command":"git -C /tmp/repo commit -m hi"}}'
+t "-c key=val add ."                  ask   '{"tool_name":"Bash","tool_input":{"command":"git -c user.name=x add ."}}'
+t "-C path rm file"                   ask   '{"tool_name":"Bash","tool_input":{"command":"git -C /tmp/repo rm README.md"}}'
+t "-C path rm --cached file"          ask   '{"tool_name":"Bash","tool_input":{"command":"git -C /tmp/repo rm --cached secret.txt"}}'
+t "-C path stash"                     ask   '{"tool_name":"Bash","tool_input":{"command":"git -C /tmp/repo stash"}}'
+
 echo "--- allow: not git ---"
 t "non-git command"     allow '{"tool_name":"Bash","tool_input":{"command":"ls -la"}}'
 t "empty command"       allow '{"tool_name":"Bash","tool_input":{"command":""}}'

@@ -4,82 +4,82 @@ filter: '\bgit\b'
 rules:
   block:
     - name: git push --force
-      pattern: 'git\s+push\s.*(--force|(?<=\s)-[a-zA-Z]*f\b)'
+      pattern: 'git(?:\s+-\S+(?:\s+(?:"[^"]*"|''[^'']*''|[^-\s]\S*))?)*\s+push\s.*(--force|(?<=\s)-[a-zA-Z]*f\b)'
       reason: overwrites shared remote history
       ref: https://git-scm.com/docs/git-push#Documentation/git-push.txt--f
 
     - name: git reset --hard
-      pattern: 'git\s+reset\s.*--hard'
+      pattern: 'git(?:\s+-\S+(?:\s+(?:"[^"]*"|''[^'']*''|[^-\s]\S*))?)*\s+reset\s.*--hard'
       reason: discards uncommitted changes with no recovery
       ref: https://git-scm.com/docs/git-reset#Documentation/git-reset.txt---hard
 
     - name: git checkout .
-      pattern: 'git\s+checkout\s+\.\s*$'
+      pattern: 'git(?:\s+-\S+(?:\s+(?:"[^"]*"|''[^'']*''|[^-\s]\S*))?)*\s+checkout\s+\.\s*$'
       reason: discards all working tree changes with no recovery
       ref: https://git-scm.com/docs/git-checkout
 
     - name: git checkout -- <file>
-      pattern: 'git\s+checkout\s+--\s'
+      pattern: 'git(?:\s+-\S+(?:\s+(?:"[^"]*"|''[^'']*''|[^-\s]\S*))?)*\s+checkout\s+--\s'
       reason: discards working tree changes to specified files with no recovery
       ref: https://git-scm.com/docs/git-checkout
 
     - name: git restore .
-      pattern: 'git\s+restore\s+\.\s*$'
+      pattern: 'git(?:\s+-\S+(?:\s+(?:"[^"]*"|''[^'']*''|[^-\s]\S*))?)*\s+restore\s+\.\s*$'
       reason: discards all unstaged changes with no recovery
       ref: https://git-scm.com/docs/git-restore
 
     - name: git clean -f
-      pattern: 'git\s+clean\s.*(?<=\s)-[a-zA-Z]*f'
+      pattern: 'git(?:\s+-\S+(?:\s+(?:"[^"]*"|''[^'']*''|[^-\s]\S*))?)*\s+clean\s.*(?<=\s)-[a-zA-Z]*f'
       reason: deletes untracked files with no recovery
       ref: https://git-scm.com/docs/git-clean#Documentation/git-clean.txt--f
 
     - name: git branch -D
-      pattern: 'git\s+branch\s.*(?<=\s)-[a-zA-Z]*D'
+      pattern: 'git(?:\s+-\S+(?:\s+(?:"[^"]*"|''[^'']*''|[^-\s]\S*))?)*\s+branch\s.*(?<=\s)-[a-zA-Z]*D'
       reason: force-deletes branch regardless of merge status
       ref: https://git-scm.com/docs/git-branch#Documentation/git-branch.txt--D
 
     - name: git stash drop/clear
-      pattern: 'git\s+stash\s+(drop|clear)'
+      pattern: 'git(?:\s+-\S+(?:\s+(?:"[^"]*"|''[^'']*''|[^-\s]\S*))?)*\s+stash\s+(drop|clear)'
       reason: discards stashed changes with no recovery
       ref: https://git-scm.com/docs/git-stash#Documentation/git-stash.txt-drop
 
     - name: git reflog expire/delete
-      pattern: 'git\s+reflog\s+(expire|delete)'
+      pattern: 'git(?:\s+-\S+(?:\s+(?:"[^"]*"|''[^'']*''|[^-\s]\S*))?)*\s+reflog\s+(expire|delete)'
       reason: destroys the local recovery log
       ref: https://git-scm.com/docs/git-reflog#Documentation/git-reflog.txt-expire
 
   ask:
     - name: git add
-      pattern: 'git\s+add(\s|$)'
+      pattern: 'git(?:\s+-\S+(?:\s+(?:"[^"]*"|''[^'']*''|[^-\s]\S*))?)*\s+add(\s|$)'
       reason: stages files for commit
       ref: https://git-scm.com/docs/git-add
 
     - name: git rm
-      pattern: 'git\s+rm\b(?!.*--cached)'
+      pattern: 'git(?:\s+-\S+(?:\s+(?:"[^"]*"|''[^'']*''|[^-\s]\S*))?)*\s+rm\b(?!.*--cached)'
       reason: deletes file from disk and stages its removal
       ref: https://git-scm.com/docs/git-rm
 
     - name: git rm --cached
-      pattern: 'git\s+rm\s.*--cached'
+      pattern: 'git(?:\s+-\S+(?:\s+(?:"[^"]*"|''[^'']*''|[^-\s]\S*))?)*\s+rm\s.*--cached'
       reason: removes file from index without deleting from disk
       ref: https://git-scm.com/docs/git-rm
 
     - name: git reset
-      pattern: 'git\s+reset(\s|$)'
+      pattern: 'git(?:\s+-\S+(?:\s+(?:"[^"]*"|''[^'']*''|[^-\s]\S*))?)*\s+reset(\s|$)'
       reason: modifies index or moves HEAD
       ref: https://git-scm.com/docs/git-reset
 
     - name: git commit
-      pattern: 'git\s+commit(\s|$)'
+      pattern: 'git(?:\s+-\S+(?:\s+(?:"[^"]*"|''[^'']*''|[^-\s]\S*))?)*\s+commit(\s|$)'
       reason: creates a permanent commit
       ref: https://git-scm.com/docs/git-commit
 
     - name: git stash
-      pattern: 'git\s+stash(\s|$)'
+      pattern: 'git(?:\s+-\S+(?:\s+(?:"[^"]*"|''[^'']*''|[^-\s]\S*))?)*\s+stash(\s|$)'
       reason: modifies the stash stack
       ref: https://git-scm.com/docs/git-stash
 
     - name: git push
-      pattern: 'git\s+push(\s|$)'
+      pattern: 'git(?:\s+-\S+(?:\s+(?:"[^"]*"|''[^'']*''|[^-\s]\S*))?)*\s+push(\s|$)'
       reason: publishes commits to the shared remote
       ref: https://git-scm.com/docs/git-push

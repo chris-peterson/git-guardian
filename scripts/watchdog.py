@@ -15,7 +15,9 @@ import sys
 
 
 def _unquote(s):
-    if len(s) >= 2 and s[0] in ('"', "'") and s[-1] == s[0]:
+    if len(s) >= 2 and s[0] == "'" and s[-1] == "'":
+        return s[1:-1].replace("''", "'")
+    if len(s) >= 2 and s[0] == '"' and s[-1] == '"':
         return s[1:-1]
     return s
 
