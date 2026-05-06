@@ -21,19 +21,19 @@ run_test() {
   result=$(echo "$input" | python3 "$HOOK" "$rules" 2>/dev/null || true)
   case "$expected" in
     ask)
-      if echo "$result" | grep -q '"decision":"ask"'; then
+      if echo "$result" | grep -q '"permissionDecision":"ask"'; then
         PASS=$((PASS + 1)); echo -e "  ${GREEN}PASS${NC}: $label"
       else
         FAIL=$((FAIL + 1)); echo -e "  ${RED}FAIL${NC}: $label (expected ask, got: ${result:-empty})"
       fi ;;
     block)
-      if echo "$result" | grep -q '"decision":"block"'; then
+      if echo "$result" | grep -q '"permissionDecision":"deny"'; then
         PASS=$((PASS + 1)); echo -e "  ${GREEN}PASS${NC}: $label"
       else
         FAIL=$((FAIL + 1)); echo -e "  ${RED}FAIL${NC}: $label (expected block, got: ${result:-empty})"
       fi ;;
     allow)
-      if echo "$result" | grep -qE '"decision"'; then
+      if echo "$result" | grep -qE '"permissionDecision"'; then
         FAIL=$((FAIL + 1)); echo -e "  ${RED}FAIL${NC}: $label (expected allow, got: $result)"
       else
         PASS=$((PASS + 1)); echo -e "  ${GREEN}PASS${NC}: $label"

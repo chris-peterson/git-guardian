@@ -179,12 +179,21 @@ def main():
     else:
         target = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "rules")
 
+    def _emit(decision, reason):
+        print(json.dumps({
+            "hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "permissionDecision": decision,
+                "permissionDecisionReason": reason,
+            }
+        }, separators=(",", ":")))
+
     if os.path.isdir(target):
         rule_files = sorted(glob.glob(os.path.join(target, "*.yml")))
     elif os.path.isfile(target):
         rule_files = [target]
     else:
-        print(json.dumps({"decision": "block", "reason": f"watchdog: rules not found: {target}"}, separators=(",", ":")))
+        _emit("deny", f"watchdog: rules not found: {target}")
         sys.exit(0)
 
     all_blocks = []
@@ -201,9 +210,9 @@ def main():
         all_asks.extend(asks)
 
     if all_blocks:
-        print(json.dumps({"decision": "block", "reason": "\n".join(all_blocks)}, separators=(",", ":")))
+        _emit("deny", "\n".join(all_blocks))
     elif all_asks:
-        print(json.dumps({"decision": "ask", "message": "\n".join(all_asks)}, separators=(",", ":")))
+        _emit("ask", "\n".join(all_asks))
 
     sys.exit(0)
 

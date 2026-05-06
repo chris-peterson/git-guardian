@@ -162,8 +162,8 @@ The watchdog engine outputs one of:
 
 | Decision | Output | Effect |
 | --- | --- | --- |
-| **block** | `{"decision":"block","reason":"..."}` | Command is rejected |
-| **ask** | `{"decision":"ask","message":"..."}` | User is prompted to confirm |
+| **block** | `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"..."}}` | Command is rejected |
+| **ask** | `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask","permissionDecisionReason":"..."}}` | User is prompted to confirm |
 | **allow** | *(no output)* | Command proceeds |
 
 Exit code is always `0`.
