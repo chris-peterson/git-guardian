@@ -24,6 +24,15 @@ claude plugin marketplace add https://github.com/chris-peterson/claude-marketpla
 claude plugin install ClaudeWatch@chris-peterson
 ```
 
+## Updating
+
+Third-party Claude Code marketplaces have auto-update **off by default**. Either:
+
+- **Enable auto-update once** via `/plugin` → Marketplaces → `chris-peterson` → Enable auto-update. Future releases install on the next session start.
+- **Or update manually** with `claude plugin update ClaudeWatch@chris-peterson`.
+
+See [`CHANGELOG.md`](CHANGELOG.md) for release notes.
+
 ## Documentation
 
 See the [docs site](https://chris-peterson.github.io/ClaudeWatch/) for usage, configuration, and the full [default rules](https://chris-peterson.github.io/ClaudeWatch/#/rules) reference.
