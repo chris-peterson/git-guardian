@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.1
+
+### Fixes
+- The watch-secrets `env` / `printenv` ask-rule no longer triggers on hyphenated tokens like `data-env` or `printenv-extra` appearing in comments or filenames. The previous regex used `\b...\b` boundaries, which treat hyphens as word separators; the rule now requires shell command boundaries (start of line, whitespace, `;`, `&&`, `|`, backtick, parens) on both sides.
+
 ## 0.4.0
 
 ### Other
