@@ -41,7 +41,15 @@ t "cat private.key"       ask   '{"tool_name":"Bash","tool_input":{"command":"ca
 
 echo "--- ask: env / printenv ---"
 t "env"                   ask   '{"tool_name":"Bash","tool_input":{"command":"env"}}'
+t "env -i"                ask   '{"tool_name":"Bash","tool_input":{"command":"env -i bash"}}'
 t "printenv"              ask   '{"tool_name":"Bash","tool_input":{"command":"printenv"}}'
+t "&& env"                ask   '{"tool_name":"Bash","tool_input":{"command":"cd /tmp && env"}}'
+t '$(env)'                ask   '{"tool_name":"Bash","tool_input":{"command":"echo $(env | wc -l)"}}'
+
+echo "--- allow: env-as-substring false positives ---"
+t "comment w/ data-env"   allow '{"tool_name":"Bash","tool_input":{"command":"# Get the data-env around each occurrence\ngrep -B3 -A2 getty_dsa_es_7 docs/usage-report.md | head -25"}}'
+t "cat data-env.txt"      allow '{"tool_name":"Bash","tool_input":{"command":"cat data-env.txt"}}'
+t "grep printenv-extra"   allow '{"tool_name":"Bash","tool_input":{"command":"grep printenv-extra README.md"}}'
 
 echo "--- ask: cat dotfiles ---"
 t "cat ~/.bashrc"         ask   '{"tool_name":"Bash","tool_input":{"command":"cat ~/.bashrc"}}'
