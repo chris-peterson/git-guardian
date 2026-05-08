@@ -163,7 +163,8 @@ def main():
     raw = sys.stdin.read()
     try:
         data = json.loads(raw)
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as e:
+        print(f"watchdog: invalid JSON on stdin: {e}", file=sys.stderr)
         sys.exit(0)
 
     if data.get("tool_name") != "Bash":

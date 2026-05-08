@@ -1,0 +1,177 @@
+# ClaudeWatch — Specification (v1)
+
+ClaudeWatch is a Claude Code plugin that enforces Bash command safety via a
+`PreToolUse` hook. A generic engine evaluates regex rules loaded from
+self-contained YAML rule sets and emits a single coalesced decision
+(block / ask / allow) for each Bash invocation.
+
+This spec captures the contract — what the system must do — independent of
+how it's currently implemented. Mechanism notes (current file layout, parser
+internals) live in §11.
+
+Requirement IDs use `[XX-NN]`. Categories:
+
+- **EN** — Engine (input, output, lifecycle)
+- **RS** — Rule sets (file format, discovery)
+- **RL** — Rules (block, ask, except)
+- **OUT** — Output decisions
+- **HK** — Hook wiring
+- **EXT** — Extensibility
+- **SK** — Skills (`/ClaudeWatch:help`, `/ClaudeWatch:rules`)
+- **DOC** — Documentation
+- **DIST** — Distribution / install
+- **SH** — Shipped rule sets
+- **DEV** — Development workflow
+- **FUT** — Deferred / future
+
+Requirements use [EARS syntax](https://alistairmavin.com/ears) — Ubiquitous (no
+keyword), State-Driven (`While`), Event-Driven (`When`), Optional (`Where`),
+Unwanted (`If…then`).
+
+---
+
+## 1. Engine (EN)
+
+**Core contract:** Given a Bash command on stdin, the engine deterministically
+emits exactly one of `{deny, ask, no-output}` and exits 0.
+
+- **[EN-01]** The engine shall read tool input from stdin as a single JSON object.
+- **[EN-02]** When `tool_name` is not `"Bash"`, the engine shall produce no output and exit 0.
+- **[EN-03]** When `tool_input.command` is empty or absent, the engine shall produce no output and exit 0.
+- **[EN-04]** If stdin is not valid JSON, then the engine shall produce no output and exit 0.
+- **[EN-04a]** If stdin is not valid JSON, then the engine shall write the parse error to stderr before exiting so the failure is visible in transcripts.
+- **[EN-05]** The engine shall accept a rules path as its first CLI argument.
+- **[EN-05a]** Where the engine is invoked without a rules-path argument, it shall use the directory `../rules` relative to the engine script.
+- **[EN-06]** When the rules path is a directory, the engine shall evaluate every `*.yml` file in that directory.
+- **[EN-07]** When the rules path is a single file, the engine shall evaluate only that file.
+- **[EN-08]** If the rules path does not exist, then the engine shall emit a `deny` decision with a "rules not found" reason that names the path.
+- **[EN-09]** When the engine evaluates multiple rule files, it shall process them in a stable, sorted order.
+- **[EN-10]** The engine's process exit code shall be `0` regardless of decision or error condition.
+- **[EN-11]** The engine shall not require any third-party Python packages at runtime.
+
+## 2. Rule Sets (RS)
+
+A rule set is a single YAML file declaring a named bundle of rules.
+
+- **[RS-01]** Each rule set shall declare a top-level `name` field.
+- **[RS-02]** Where a `filter` regex is declared, when it does not match the command, the engine shall skip all rules in that set.
+- **[RS-03]** Each rule set shall declare a `rules` map containing optional `block` and `ask` lists.
+- **[RS-04]** Where a rule set file is named `*.yml.disabled`, the engine shall not load it.
+- **[RS-05]** If a rule set fails to load (parse error, file unreadable), then the engine shall emit a `deny` with a load-error reason and continue evaluating remaining rule sets.
+- **[RS-06]** If a rule set's `filter` regex is invalid, then the engine shall emit a `deny` with the regex error and skip the rest of that set.
+
+## 3. Rules (RL)
+
+Rules are the matchable units within a rule set.
+
+- **[RL-01]** Each rule shall declare `name`, `pattern`, and `reason`.
+- **[RL-02]** Each rule may declare an optional `ref` URL.
+- **[RL-03]** Rule patterns shall be Python regexes matched against the full Bash command string with `re.search()` semantics (matches anywhere; no implicit anchoring).
+- **[RL-04]** If a rule's `pattern` is empty, then the engine shall emit a `deny` with a configuration-error reason naming the rule.
+- **[RL-05]** If a rule's `pattern` is an invalid regex, then the engine shall emit a `deny` with the regex error and continue.
+- **[RL-06]** Within a rule set, the engine shall evaluate `block` rules before `ask` rules.
+- **[RL-07]** Where an `except` regex is declared on an `ask` rule, when both `pattern` and `except` match, the engine shall skip that rule (no ask emitted).
+- **[RL-08]** If an `except` field appears on a `block` rule, then the engine shall log a warning to stderr and ignore the field; the block rule shall still fire on `pattern` match.
+- **[RL-09]** If a rule's `except` regex is invalid, then the engine shall emit a `deny` with the regex error and continue.
+
+## 4. Output Decisions (OUT)
+
+The engine emits at most one decision per invocation.
+
+- **[OUT-01]** When emitting a decision, the engine shall write a single JSON object to stdout matching the Claude Code `hookSpecificOutput` schema with `hookEventName: "PreToolUse"` and `permissionDecision` set to `"deny"` or `"ask"`.
+- **[OUT-02]** When emitting a decision, the engine shall format each violation as `<rule-set-name> — <reason>` (with ` — <ref>` appended when `ref` is present).
+- **[OUT-03]** When any block rule matches in any rule set, the engine shall emit a single `deny` decision aggregating all block reasons, separated by newlines.
+- **[OUT-04]** When no block rule matches and at least one ask rule matches in any rule set, the engine shall emit a single `ask` decision aggregating all ask reasons, separated by newlines.
+- **[OUT-05]** When no rule matches, the engine shall produce no stdout output (allow-by-default).
+
+## 5. Hook Wiring (HK)
+
+- **[HK-01]** The plugin shall register exactly one `PreToolUse` hook with `matcher: "Bash"` that invokes the engine against the plugin's rules directory.
+- **[HK-02]** The plugin shall register a `SessionStart` hook for plugin-update self-checks. (Currently a no-op placeholder — see [FUT-01].)
+- **[HK-03]** The plugin shall declare its hooks in `hooks/hooks.json`.
+
+## 6. Extensibility (EXT)
+
+- **[EXT-01]** Where a new `*.yml` file is added to the rules directory, the engine shall auto-discover it on the next invocation without any configuration change to `hooks.json`.
+- **[EXT-02]** Where a rule set is renamed from `*.yml` to `*.yml.disabled`, the engine shall stop loading it on the next invocation.
+- **[EXT-03]** New rule sets shall not require code changes to the engine.
+
+## 7. Skills (SK)
+
+The plugin ships interactive Claude Code skills that surface and edit rules
+without leaving the session.
+
+### `/ClaudeWatch:help`
+
+- **[SK-01]** Where the user invokes `/ClaudeWatch:help`, the skill shall display an overview covering: shipped rule sets, available commands, decision semantics, and documentation links.
+
+### `/ClaudeWatch:rules`
+
+- **[SK-02]** Where the user invokes `/ClaudeWatch:rules`, the skill shall list every enabled rule set with two tables (block, ask) using stable IDs of the form `<short-name>-block-NN` and `<short-name>-ask-NN` (zero-padded).
+- **[SK-03]** When listing rule sets, the skill shall also list any disabled rule sets (`*.yml.disabled`).
+- **[SK-04]** Where the user passes `--list`, the skill shall list rules and exit without entering the edit loop.
+- **[SK-05]** When the user enters an edit command, the skill shall accept one operation per turn and loop until the user enters `done`. The supported operations are: `<id>:block` (move rule to block), `<id>:ask` (move rule to ask), `<id>:allow` (remove the rule), `add` (add a new rule), `disable <name>` (disable a rule set), `enable <name>` (re-enable a disabled rule set), and `new` (create a new rule set).
+- **[SK-06]** Before writing edits, the skill shall scan for duplicate patterns, shadowing patterns, and cross-section conflicts (same pattern in both block and ask) and shall report any findings to the user.
+- **[SK-07]** Before writing edits, the skill shall present a preview of the updated rule tables and shall require explicit confirmation (`yes` / `edit` / `abort`) from the user.
+- **[SK-08]** When applying edits, the skill shall write only modified rule set files and shall preserve the standard YAML format.
+- **[SK-09]** When the user issues `disable <name>`, the skill shall rename `rules/<name>.yml` to `rules/<name>.yml.disabled`.
+- **[SK-10]** When the user issues `enable <name>`, the skill shall rename `rules/<name>.yml.disabled` to `rules/<name>.yml`.
+- **[SK-11]** When the user issues `new`, the skill shall create a new `rules/watch-<name>.yml` (the name shall start with `watch-`) with the standard YAML format.
+- **[SK-12]** After applying changes, the skill shall run `tests/test-watchdog.sh` and shall report any failures.
+
+## 8. Documentation (DOC)
+
+- **[DOC-01]** The plugin shall ship a Docsify documentation site under `docs/`.
+- **[DOC-02]** `just docs` shall regenerate the rules-reference page from the YAML rule files.
+- **[DOC-03]** The documentation site shall be published at `https://chris-peterson.github.io/ClaudeWatch/`.
+- **[DOC-04]** The documentation shall include a YAML schema reference covering top-level fields and rule fields.
+
+## 9. Distribution (DIST)
+
+- **[DIST-01]** The plugin shall be installable via `claude plugin install ClaudeWatch@chris-peterson` from the `chris-peterson` marketplace.
+- **[DIST-02]** The plugin shall declare a manifest at `.claude-plugin/plugin.json`.
+- **[DIST-03]** The plugin shall be runnable from a working copy via `claude --plugin-dir .` (no install required for local testing).
+
+## 10. Shipped Rule Sets (SH)
+
+These are the rule sets the plugin ships out of the box. Each must be
+self-contained and removable by file rename.
+
+- **[SH-01]** The plugin shall ship `watch-git.yml` whose **block** rules cover: `git push --force`, `git reset --hard`, `git checkout .`, `git checkout -- <file>`, `git restore .`, `git clean -f`, `git branch -D`, `git stash drop`, `git stash clear`, and `git reflog expire/delete`. Its **ask** rules shall cover: `git add`, `git rm`, `git rm --cached`, `git reset`, `git commit`, `git stash`, and `git push`.
+- **[SH-01a]** Each rule in `watch-git` shall match through git's pre-subcommand global flags (`-C <path>`, `-c <key>=<value>`, `--git-dir[=]<path>`, `-P`), including quoted values containing spaces, so that invocations like `git -C /repo push --force` are not silently bypassed.
+- **[SH-02]** The plugin shall ship `watch-installs.yml` whose **block** rules cover: `curl … | sh`, `wget … | sh`, `npm install -g` / `--global`, `sudo pip[3] install`, and `brew install`. Its **ask** rules shall cover: `npm install`, `yarn add`, `pnpm add`, `pip[3] install`, `cargo add`, `cargo install`, `go install`, `go get`, `gem install`, `composer require`, and `npx`.
+- **[SH-03]** The plugin shall ship `watch-files.yml` whose **block** rules cover: `rm -rf /`, `rm -rf /*`, `chmod 777`, `mv … /dev/null`, and `shred`. Its **ask** rules shall cover: recursive `rm -rf`, recursive `rm -r`, `mv` from a root-level path, `chmod`, and `chown`. Where a recursive-rm ask rule fires on a path under `~/.cache/`, `/tmp/`, or `/var/tmp/`, the rule shall be skipped via `except`.
+- **[SH-04]** The plugin shall ship `watch-secrets.yml` whose **block** rules cover: reading SSH private keys (`cat … /.ssh/id_*`), reading cloud credentials (`.aws/credentials`, `.gcp/`, `.azure/`, `.config/gcloud`), and `echo`/`printf`-ing environment variables whose names match `SECRET|TOKEN|PASSWORD|API.?KEY|PRIVATE.?KEY`. Its **ask** rules shall cover: reading files whose names suggest secrets, exporting secret-named env vars inline, reading `.env` files, reading `*.pem`/`*.key`/`*.crt`/`*.cert` files, dumping the environment via `env` or `printenv`, and reading dotfiles.
+- **[SH-04a]** Rules that match commands as full shell tokens (e.g. `env`, `printenv`) shall use shell-command boundaries (start/whitespace/`;`/`&&`/`|`/backtick/parens) rather than `\b` word boundaries, so that hyphenated tokens (`my-env`) do not defeat the match.
+- **[SH-05]** Each shipped rule set shall declare a top-level `filter` regex that short-circuits commands outside the rule set's domain.
+- **[SH-06]** Each shipped rule set shall include `ref` URLs pointing to upstream tool documentation, vendor docs, or a CWE/OWASP entry.
+- **[SH-07]** Each shipped rule set shall have a corresponding test file `tests/test-watch-<name>.sh` that exercises representative match/no-match cases.
+
+## 11. Development & Testing (DEV)
+
+- **[DEV-01]** `just test` shall run the full test suite via `tests/test-watchdog.sh`.
+- **[DEV-02]** The test suite shall exercise each shipped rule set independently and shall also exercise engine-level behavior (decision aggregation, error handling, file/directory rules paths).
+- **[DEV-03]** `just rules` shall launch an interactive Claude Code session with the local plugin loaded and the rules skill open.
+- **[DEV-04]** `just docs-preview` shall serve the generated docs locally for review.
+
+## 12. Implementation Notes (non-normative)
+
+These describe how the current implementation satisfies the spec. They are
+*not* requirements — they may change without bumping the spec version.
+
+- The engine is a single Python script at `scripts/watchdog.py` with a minimal
+  pure-Python YAML parser (no PyYAML dependency).
+- The hook command line is
+  `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/watchdog.py ${CLAUDE_PLUGIN_ROOT}/rules`.
+- The SessionStart hook (`hooks/cli-freshness.sh`) is intentionally a no-op
+  placeholder for future plugin-update self-checks; ClaudeWatch does not
+  install a CLI shim, so the freshness-check pattern used by sibling plugins
+  (`beacon`, `tack`, `logbook`) does not apply here.
+- The rules-skill ID convention strips the `watch-` prefix from the rule set
+  name (e.g. `watch-git` → `git-block-01`).
+
+## 13. Future / Deferred (FUT)
+
+- **[FUT-01]** Where a plugin-update self-check is implemented, the SessionStart hook shall verify `watchdog.py` emits the expected `hookSpecificOutput.permissionDecision` schema.
+- **[FUT-02]** Where the user adds a custom rule set via `/ClaudeWatch:rules new`, the skill should offer to scaffold a matching test file in `tests/`.
+- **[FUT-03]** Where multi-line YAML strings or nested anchors are required, the parser may switch to PyYAML; currently the minimal parser does not support these constructs.
