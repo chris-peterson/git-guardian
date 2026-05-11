@@ -5,20 +5,23 @@ This is the reference for the **claude-watchdog** rules file format. Each YAML f
 ## Overview
 
 ```yaml
-name: <string>           # required — rule set identity
-filter: '<regex>'         # optional — pre-filter for fast skipping
+name: <string>                # required — rule set identity
+filter: '<regex>'              # optional — pre-filter for bash-target rules
+extensions: ['.ext', ...]      # optional — gates file-content-target rules by file extension
 
 rules:
-  block:                  # rules that reject the command outright
+  block:                       # rules that reject the command outright
     - name: <string>
       pattern: '<regex>'
+      target: bash | file-content  # optional
       reason: <string>
       ref: <url>
 
-  ask:                    # rules that require user confirmation
+  ask:                         # rules that require user confirmation
     - name: <string>
       pattern: '<regex>'
-      except: '<regex>'   # optional — skip this rule if except matches
+      target: bash | file-content  # optional
+      except: '<regex>'        # optional — skip this rule if except matches
       reason: <string>
       ref: <url>
 ```
@@ -43,7 +46,7 @@ For example: `watch-git — overwrites shared remote history — https://git-scm
 
 ### `filter` (optional)
 
-A Python regex applied to the command **before** any rules are checked. If the command does not match the filter, the entire rule set is skipped — no rules are evaluated.
+A Python regex applied to the bash command **before** any `target: bash` rules are checked. If the command does not match the filter, those rules are skipped. The filter does **not** gate `target: file-content` rules — those are gated by `extensions`.
 
 ```yaml
 filter: '\bgit\b'
@@ -51,7 +54,17 @@ filter: '\bgit\b'
 
 This is a performance optimization. Without it, every Bash command would be checked against every rule pattern. Use a broad filter that matches the domain of commands your rules care about.
 
-If omitted, all Bash commands are evaluated against the rules.
+If omitted, all bash-target rules are evaluated against every Bash command.
+
+### `extensions` (optional)
+
+An inline list of file extensions (including the leading dot) that gates `target: file-content` rules. When the engine handles a `Write` or `Edit` invocation, it skips the rule set entirely unless the target file's extension matches one of the listed values. Matching is case-insensitive.
+
+```yaml
+extensions: ['.ps1', '.psm1', '.psd1']
+```
+
+If omitted, the rule set's `target: file-content` rules are never evaluated. Bash-target rules are unaffected.
 
 ### `rules` (required)
 
@@ -77,7 +90,10 @@ name: git push --force
 
 ### `pattern` (required)
 
-Python regex matched against the full Bash command string using `re.search()`. This means the pattern matches **anywhere** in the command — you do not need to anchor it with `^` or `$` unless you specifically want to.
+Python regex matched against the input string using `re.search()`. This means the pattern matches **anywhere** — you do not need to anchor it with `^` or `$` unless you specifically want to. The input string depends on the rule's `target`:
+
+- `target: bash` — the full Bash command string (the default if `target` is omitted).
+- `target: file-content` — the body of the file being written or edited. For `Edit`, this is the full post-edit content (the on-disk file with `old_string` replaced by `new_string`).
 
 ```yaml
 pattern: 'git\s+push\s.*(--force|-[a-zA-Z]*f\b)'
@@ -109,6 +125,17 @@ URL to relevant documentation. Shown at the end of the block/ask message. Can be
 ref: https://git-scm.com/docs/git-push#Documentation/git-push.txt--f
 ```
 
+### `target` (optional)
+
+Selects which engine input the rule's `pattern` runs against. Values:
+
+- `bash` (default) — match against the Bash command string.
+- `file-content` — match against the body of a file being authored via `Write` or modified via `Edit`. Requires the rule set to declare `extensions` listing applicable file extensions; otherwise the rule is never evaluated.
+
+A single rule set may mix bash-target and file-content-target rules. For example, `watch-pwsh.yml` ships both inline-script rules (run against `pwsh -Command "..."` bash invocations) and file-content rules (run against `.ps1`/`.psm1`/`.psd1` script bodies).
+
+Any value other than `bash` or `file-content` causes the engine to emit a `deny` decision naming the rule.
+
 ### `except` (optional, ask rules only)
 
 A Python regex that exempts matching commands from this rule. If `except` matches the command, the rule is skipped even though `pattern` matched. This reduces prompt noise for known-safe patterns without weakening block rules.
@@ -125,7 +152,7 @@ Using `except` on a `block` rule emits a warning and is ignored — block rules 
 
 ## Hook wiring
 
-A single `PreToolUse` hook points the engine at the `rules/` directory. The engine auto-discovers all `*.yml` files, evaluates every rule set, and returns a single coalesced decision:
+Two `PreToolUse` hooks point the engine at the `rules/` directory — one for `Bash`, one for `Write|Edit`. The engine auto-discovers all `*.yml` files, evaluates every rule set, and returns a single coalesced decision:
 
 ```json
 {
@@ -133,6 +160,15 @@ A single `PreToolUse` hook points the engine at the `rules/` directory. The engi
     "PreToolUse": [
       {
         "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/scripts/watchdog.py ${CLAUDE_PLUGIN_ROOT}/rules"
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
         "hooks": [
           {
             "type": "command",
@@ -147,7 +183,7 @@ A single `PreToolUse` hook points the engine at the `rules/` directory. The engi
 
 ## Hook protocol
 
-Claude Code sends tool invocations as JSON on stdin:
+Claude Code sends tool invocations as JSON on stdin. The engine handles three tool names:
 
 ```json
 {
@@ -158,17 +194,41 @@ Claude Code sends tool invocations as JSON on stdin:
 }
 ```
 
+```json
+{
+  "tool_name": "Write",
+  "tool_input": {
+    "file_path": "cleanup.ps1",
+    "content": "Remove-Item -Recurse -Force /tmp/x"
+  }
+}
+```
+
+```json
+{
+  "tool_name": "Edit",
+  "tool_input": {
+    "file_path": "helper.py",
+    "old_string": "return 1",
+    "new_string": "return eval(formula)",
+    "replace_all": false
+  }
+}
+```
+
+For `Edit`, the engine reads the on-disk file, applies the `old_string` → `new_string` substitution (all occurrences if `replace_all` is true), and matches `target: file-content` rules against the resulting full content. If the file cannot be read, the engine falls back to matching `new_string` alone.
+
 The watchdog engine outputs one of:
 
 | Decision | Output | Effect |
 | --- | --- | --- |
-| **block** | `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"..."}}` | Command is rejected |
+| **block** | `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"..."}}` | Tool call is rejected |
 | **ask** | `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask","permissionDecisionReason":"..."}}` | User is prompted to confirm |
-| **allow** | *(no output)* | Command proceeds |
+| **allow** | *(no output)* | Tool call proceeds |
 
 Exit code is always `0`.
 
-Non-`Bash` tool invocations and empty commands are silently allowed.
+Tool invocations other than `Bash`, `Write`, `Edit` (and empty payloads) are silently allowed.
 
 ## Creating a new rule set
 

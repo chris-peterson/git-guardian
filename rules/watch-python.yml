@@ -1,0 +1,116 @@
+name: watch-python
+filter: '\bpython3?\b'
+extensions: ['.py']
+
+rules:
+  block:
+    - name: shutil.rmtree at sensitive root (bash)
+      pattern: 'shutil\.rmtree\s*\(\s*[\x27"](/|~|\$HOME)'
+      target: bash
+      reason: recursive delete rooted at filesystem root, home, or $HOME
+      ref: https://docs.python.org/3/library/shutil.html#shutil.rmtree
+    - name: shutil.rmtree at sensitive root (file)
+      pattern: 'shutil\.rmtree\s*\(\s*[\x27"](/|~|\$HOME)'
+      target: file-content
+      reason: recursive delete rooted at filesystem root, home, or $HOME
+      ref: https://docs.python.org/3/library/shutil.html#shutil.rmtree
+
+    - name: pickle.loads deserialization (bash)
+      pattern: '\bpickle\.loads?\s*\('
+      target: bash
+      reason: pickle deserialization is an RCE primitive on untrusted input
+      ref: https://docs.python.org/3/library/pickle.html
+    - name: pickle.loads deserialization (file)
+      pattern: '\bpickle\.loads?\s*\('
+      target: file-content
+      reason: pickle deserialization is an RCE primitive on untrusted input
+      ref: https://docs.python.org/3/library/pickle.html
+
+    - name: __import__('os').system/popen (bash)
+      pattern: '__import__\s*\(\s*[\x27"]os[\x27"]\s*\)\s*\.\s*(system|popen)'
+      target: bash
+      reason: classic sandbox-escape pattern (dynamic os.system/popen)
+      ref: https://docs.python.org/3/library/functions.html#import__
+    - name: __import__('os').system/popen (file)
+      pattern: '__import__\s*\(\s*[\x27"]os[\x27"]\s*\)\s*\.\s*(system|popen)'
+      target: file-content
+      reason: classic sandbox-escape pattern (dynamic os.system/popen)
+      ref: https://docs.python.org/3/library/functions.html#import__
+
+    - name: subprocess shell=True with destructive payload (bash)
+      pattern: 'subprocess\.\w+\s*\((?=[^)]*shell\s*=\s*True)(?=[^)]*(\brm\s+-|dd\s+.*of=/dev/))'
+      target: bash
+      reason: subprocess with shell=True invoking destructive shell primitives
+      ref: https://docs.python.org/3/library/subprocess.html#security-considerations
+    - name: subprocess shell=True with destructive payload (file)
+      pattern: 'subprocess\.\w+\s*\((?=[^)]*shell\s*=\s*True)(?=[^)]*(\brm\s+-|dd\s+.*of=/dev/))'
+      target: file-content
+      reason: subprocess with shell=True invoking destructive shell primitives
+      ref: https://docs.python.org/3/library/subprocess.html#security-considerations
+
+  ask:
+    - name: shutil.rmtree (bash)
+      pattern: '\bshutil\.rmtree\s*\('
+      target: bash
+      reason: recursive delete via shutil
+      ref: https://docs.python.org/3/library/shutil.html#shutil.rmtree
+    - name: shutil.rmtree (file)
+      pattern: '\bshutil\.rmtree\s*\('
+      target: file-content
+      reason: recursive delete via shutil
+      ref: https://docs.python.org/3/library/shutil.html#shutil.rmtree
+
+    - name: os.remove / os.unlink (bash)
+      pattern: '\bos\.(remove|unlink)\s*\('
+      target: bash
+      reason: deletes a file via os
+      ref: https://docs.python.org/3/library/os.html#os.remove
+    - name: os.remove / os.unlink (file)
+      pattern: '\bos\.(remove|unlink)\s*\('
+      target: file-content
+      reason: deletes a file via os
+      ref: https://docs.python.org/3/library/os.html#os.remove
+
+    - name: os.system (bash)
+      pattern: '\bos\.system\s*\('
+      target: bash
+      reason: invokes a subshell with arbitrary content
+      ref: https://docs.python.org/3/library/os.html#os.system
+    - name: os.system (file)
+      pattern: '\bos\.system\s*\('
+      target: file-content
+      reason: invokes a subshell with arbitrary content
+      ref: https://docs.python.org/3/library/os.html#os.system
+
+    - name: subprocess shell=True (bash)
+      pattern: 'subprocess\.\w+\s*\([^)]*shell\s*=\s*True'
+      target: bash
+      reason: subprocess with shell=True is a code-injection risk on dynamic input
+      ref: https://docs.python.org/3/library/subprocess.html#security-considerations
+    - name: subprocess shell=True (file)
+      pattern: 'subprocess\.\w+\s*\([^)]*shell\s*=\s*True'
+      target: file-content
+      reason: subprocess with shell=True is a code-injection risk on dynamic input
+      ref: https://docs.python.org/3/library/subprocess.html#security-considerations
+
+    - name: eval (bash)
+      pattern: '\beval\s*\('
+      target: bash
+      reason: eval executes arbitrary Python expressions
+      ref: https://docs.python.org/3/library/functions.html#eval
+    - name: eval (file)
+      pattern: '\beval\s*\('
+      target: file-content
+      reason: eval executes arbitrary Python expressions
+      ref: https://docs.python.org/3/library/functions.html#eval
+
+    - name: exec (bash)
+      pattern: '\bexec\s*\('
+      target: bash
+      reason: exec executes arbitrary Python statements
+      ref: https://docs.python.org/3/library/functions.html#exec
+    - name: exec (file)
+      pattern: '\bexec\s*\('
+      target: file-content
+      reason: exec executes arbitrary Python statements
+      ref: https://docs.python.org/3/library/functions.html#exec

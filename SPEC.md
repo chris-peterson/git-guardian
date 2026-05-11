@@ -1,9 +1,12 @@
 # ClaudeWatch — Specification (v1)
 
-ClaudeWatch is a Claude Code plugin that enforces Bash command safety via a
-`PreToolUse` hook. A generic engine evaluates regex rules loaded from
-self-contained YAML rule sets and emits a single coalesced decision
-(block / ask / allow) for each Bash invocation.
+ClaudeWatch is a Claude Code plugin that enforces Bash command and script
+safety via a `PreToolUse` hook. A generic engine evaluates regex rules loaded
+from self-contained YAML rule sets and emits a single coalesced decision
+(block / ask / allow) for each Bash, Write, or Edit invocation. Rules may
+target the bash command string or the body of a script file being written or
+edited, so destructive intent is caught both inline (`pwsh -Command "..."`)
+and at the moment a script file is authored.
 
 This spec captures the contract — what the system must do — independent of
 how it's currently implemented. Mechanism notes (current file layout, parser
@@ -32,12 +35,15 @@ Unwanted (`If…then`).
 
 ## 1. Engine (EN)
 
-**Core contract:** Given a Bash command on stdin, the engine deterministically
-emits exactly one of `{deny, ask, no-output}` and exits 0.
+**Core contract:** Given tool input on stdin, the engine deterministically
+emits exactly one of `{deny, ask, no-output}` and exits 0. The engine handles
+three tool inputs: `Bash` (matched against the bash command string), `Write`
+(matched against the new file content), and `Edit` (matched against the full
+post-edit file content).
 
 - **[EN-01]** The engine shall read tool input from stdin as a single JSON object.
-- **[EN-02]** When `tool_name` is not `"Bash"`, the engine shall produce no output and exit 0.
-- **[EN-03]** When `tool_input.command` is empty or absent, the engine shall produce no output and exit 0.
+- **[EN-02]** When `tool_name` is not one of `"Bash"`, `"Write"`, `"Edit"`, the engine shall produce no output and exit 0.
+- **[EN-03]** When the relevant input field for the tool is empty or absent, the engine shall produce no output and exit 0. The relevant field is `tool_input.command` for `Bash`, `tool_input.content` for `Write`, and `tool_input.new_string` (combined with `tool_input.file_path`) for `Edit`.
 - **[EN-04]** If stdin is not valid JSON, then the engine shall produce no output and exit 0.
 - **[EN-04a]** If stdin is not valid JSON, then the engine shall write the parse error to stderr before exiting so the failure is visible in transcripts.
 - **[EN-05]** The engine shall accept a rules path as its first CLI argument.
@@ -48,17 +54,21 @@ emits exactly one of `{deny, ask, no-output}` and exits 0.
 - **[EN-09]** When the engine evaluates multiple rule files, it shall process them in a stable, sorted order.
 - **[EN-10]** The engine's process exit code shall be `0` regardless of decision or error condition.
 - **[EN-11]** The engine shall not require any third-party Python packages at runtime.
+- **[EN-12]** When evaluating a `Write` input, the engine shall match rules against the value of `tool_input.content`.
+- **[EN-13]** When evaluating an `Edit` input, the engine shall read the file at `tool_input.file_path`, apply the `old_string` → `new_string` substitution (all occurrences if `tool_input.replace_all` is true, otherwise the first occurrence), and match rules against the resulting full content. If the file cannot be read, the engine shall match against `tool_input.new_string` alone.
 
 ## 2. Rule Sets (RS)
 
 A rule set is a single YAML file declaring a named bundle of rules.
 
 - **[RS-01]** Each rule set shall declare a top-level `name` field.
-- **[RS-02]** Where a `filter` regex is declared, when it does not match the command, the engine shall skip all rules in that set.
+- **[RS-02]** Where a `filter` regex is declared, when it does not match the bash command, the engine shall skip all `target: bash` rules in that set. The `filter` shall not gate `target: file-content` rules.
 - **[RS-03]** Each rule set shall declare a `rules` map containing optional `block` and `ask` lists.
 - **[RS-04]** Where a rule set file is named `*.yml.disabled`, the engine shall not load it.
 - **[RS-05]** If a rule set fails to load (parse error, file unreadable), then the engine shall emit a `deny` with a load-error reason and continue evaluating remaining rule sets.
 - **[RS-06]** If a rule set's `filter` regex is invalid, then the engine shall emit a `deny` with the regex error and skip the rest of that set.
+- **[RS-07]** Each rule set may declare an optional top-level `extensions` field as an inline list (e.g. `extensions: ['.ps1', '.psm1']`). The engine shall evaluate `target: file-content` rules in this set only when the `Write`/`Edit` target file's extension matches one of the listed values (case-insensitive).
+- **[RS-08]** If a rule set has no `extensions` field, then the engine shall not evaluate its `target: file-content` rules for any `Write`/`Edit` input.
 
 ## 3. Rules (RL)
 
@@ -66,13 +76,17 @@ Rules are the matchable units within a rule set.
 
 - **[RL-01]** Each rule shall declare `name`, `pattern`, and `reason`.
 - **[RL-02]** Each rule may declare an optional `ref` URL.
-- **[RL-03]** Rule patterns shall be Python regexes matched against the full Bash command string with `re.search()` semantics (matches anywhere; no implicit anchoring).
+- **[RL-03]** Rule patterns shall be Python regexes matched against the input string with `re.search()` semantics (matches anywhere; no implicit anchoring). The input string depends on the rule's `target`: the bash command for `target: bash`, the script body for `target: file-content`.
 - **[RL-04]** If a rule's `pattern` is empty, then the engine shall emit a `deny` with a configuration-error reason naming the rule.
 - **[RL-05]** If a rule's `pattern` is an invalid regex, then the engine shall emit a `deny` with the regex error and continue.
 - **[RL-06]** Within a rule set, the engine shall evaluate `block` rules before `ask` rules.
 - **[RL-07]** Where an `except` regex is declared on an `ask` rule, when both `pattern` and `except` match, the engine shall skip that rule (no ask emitted).
 - **[RL-08]** If an `except` field appears on a `block` rule, then the engine shall log a warning to stderr and ignore the field; the block rule shall still fire on `pattern` match.
 - **[RL-09]** If a rule's `except` regex is invalid, then the engine shall emit a `deny` with the regex error and continue.
+- **[RL-10]** Each rule may declare an optional `target` field with value `bash` or `file-content`. If omitted, the rule defaults to `target: bash`.
+- **[RL-11]** When evaluating a `Bash` input, the engine shall evaluate only `target: bash` rules.
+- **[RL-12]** When evaluating a `Write` or `Edit` input, the engine shall evaluate only `target: file-content` rules whose containing rule set's `extensions` list matches the input's file extension.
+- **[RL-13]** If a rule's `target` value is neither `bash` nor `file-content`, then the engine shall emit a `deny` with a configuration-error reason naming the rule.
 
 ## 4. Output Decisions (OUT)
 
@@ -86,7 +100,7 @@ The engine emits at most one decision per invocation.
 
 ## 5. Hook Wiring (HK)
 
-- **[HK-01]** The plugin shall register exactly one `PreToolUse` hook with `matcher: "Bash"` that invokes the engine against the plugin's rules directory.
+- **[HK-01]** The plugin shall register `PreToolUse` hooks that invoke the engine against the plugin's rules directory for the `Bash`, `Write`, and `Edit` tools. Matchers may be combined via regex alternation (e.g. `matcher: "Write|Edit"`).
 - **[HK-02]** The plugin shall register a `SessionStart` hook for plugin-update self-checks. (Currently a no-op placeholder — see [FUT-01].)
 - **[HK-03]** The plugin shall declare its hooks in `hooks/hooks.json`.
 
@@ -143,9 +157,11 @@ self-contained and removable by file rename.
 - **[SH-03]** The plugin shall ship `watch-files.yml` whose **block** rules cover: `rm -rf /`, `rm -rf /*`, `chmod 777`, `mv … /dev/null`, and `shred`. Its **ask** rules shall cover: recursive `rm -rf`, recursive `rm -r`, `mv` from a root-level path, `chmod`, and `chown`. Where a recursive-rm ask rule fires on a path under `~/.cache/`, `/tmp/`, or `/var/tmp/`, the rule shall be skipped via `except`.
 - **[SH-04]** The plugin shall ship `watch-secrets.yml` whose **block** rules cover: reading SSH private keys (`cat … /.ssh/id_*`), reading cloud credentials (`.aws/credentials`, `.gcp/`, `.azure/`, `.config/gcloud`), and `echo`/`printf`-ing environment variables whose names match `SECRET|TOKEN|PASSWORD|API.?KEY|PRIVATE.?KEY`. Its **ask** rules shall cover: reading files whose names suggest secrets, exporting secret-named env vars inline, reading `.env` files, reading `*.pem`/`*.key`/`*.crt`/`*.cert` files, dumping the environment via `env` or `printenv`, and reading dotfiles.
 - **[SH-04a]** Rules that match commands as full shell tokens (e.g. `env`, `printenv`) shall use shell-command boundaries (start/whitespace/`;`/`&&`/`|`/backtick/parens) rather than `\b` word boundaries, so that hyphenated tokens (`my-env`) do not defeat the match.
-- **[SH-05]** Each shipped rule set shall declare a top-level `filter` regex that short-circuits commands outside the rule set's domain.
+- **[SH-05]** Each shipped rule set that includes `target: bash` rules shall declare a top-level `filter` regex that short-circuits commands outside the rule set's domain.
 - **[SH-06]** Each shipped rule set shall include `ref` URLs pointing to upstream tool documentation, vendor docs, or a CWE/OWASP entry.
 - **[SH-07]** Each shipped rule set shall have a corresponding test file `tests/test-watch-<name>.sh` that exercises representative match/no-match cases.
+- **[SH-08]** The plugin shall ship `watch-pwsh.yml` covering PowerShell destructive primitives both inline (in `pwsh -Command "..."` bash invocations) and in `.ps1`/`.psm1`/`.psd1` file content authored via `Write`/`Edit`. **Block** rules shall cover: `Format-Volume`, `Clear-Disk`, `Restart-Computer`, `Stop-Computer`, and `Invoke-WebRequest` piped to `Invoke-Expression`/`iex`. **Ask** rules shall cover: `Remove-Item -Recurse -Force` (with `except` for `~/.cache/`, `/tmp/`, `/var/tmp/` on the bash target), other `Remove-Item` forms, `Stop-Process -Force`, and `Set-Content`/`Out-File` overwriting sensitive paths (`/etc/`, `~/.ssh/`, `~/.aws/`).
+- **[SH-09]** The plugin shall ship `watch-python.yml` covering Python destructive primitives both inline (in `python3 -c "..."` bash invocations) and in `.py` file content authored via `Write`/`Edit`. **Block** rules shall cover: `shutil.rmtree` of `/`/`~`/`$HOME`, `pickle.loads`, `__import__('os').system`/`popen`, and `subprocess.*shell=True` containing `rm`/`dd of=/dev/`. **Ask** rules shall cover: other `shutil.rmtree`, `os.remove`/`os.unlink`, `os.system`, generic `subprocess.*shell=True`, `eval(`, and `exec(`.
 
 ## 11. Development & Testing (DEV)
 
@@ -160,9 +176,11 @@ These describe how the current implementation satisfies the spec. They are
 *not* requirements — they may change without bumping the spec version.
 
 - The engine is a single Python script at `scripts/watchdog.py` with a minimal
-  pure-Python YAML parser (no PyYAML dependency).
+  pure-Python YAML parser (no PyYAML dependency). The parser supports inline
+  list syntax (`['.ps1', '.psm1']`) for the top-level `extensions` field.
 - The hook command line is
-  `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/watchdog.py ${CLAUDE_PLUGIN_ROOT}/rules`.
+  `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/watchdog.py ${CLAUDE_PLUGIN_ROOT}/rules`,
+  invoked from two `PreToolUse` matchers: `Bash` and `Write|Edit`.
 - The SessionStart hook (`hooks/cli-freshness.sh`) is intentionally a no-op
   placeholder for future plugin-update self-checks; ClaudeWatch does not
   install a CLI shim, so the freshness-check pattern used by sibling plugins
