@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.5.0
+
+### Features
+- ClaudeWatch now inspects file content sent through the `Write` and `Edit` tools, not just `Bash` commands. Destructive primitives hidden inside a script file (e.g. `Remove-Item -Recurse -Force /` in a `.ps1` that gets executed later via `pwsh ./cleanup.ps1`) are now caught at write time — clicking "approve" on an opaque script invocation is no longer the only line of defense. For `Edit`, the engine reconstructs the full post-edit file content before matching, so a small fragment that introduces a destructive call still trips the rule.
+- New `watch-pwsh` rule set covers destructive PowerShell across both inline `pwsh -Command "..."` invocations and `.ps1` / `.psm1` / `.psd1` file contents. Block rules: `Format-Volume`, `Clear-Disk`, `Restart-Computer`, `Stop-Computer`, `Invoke-WebRequest | iex`, plus `Remove-Item -Recurse -Force` inside script files. Ask rules: inline `Remove-Item -Recurse -Force` (with `~/.cache/`, `/tmp/`, `/var/tmp/` excepted), other `Remove-Item` variants, `Stop-Process -Force`, and overwrites of sensitive paths like `/etc/`, `~/.ssh/`, `~/.aws/`.
+- New `watch-python` rule set covers destructive Python across both inline `python3 -c "..."` invocations and `.py` file contents. Block rules: `shutil.rmtree` at filesystem roots (`/`, `~`, `$HOME`), `pickle.loads`, `__import__('os').system` / `popen`, and `subprocess` calls with `shell=True` plus a destructive payload. Ask rules: other `shutil.rmtree`, `os.remove` / `os.unlink`, `os.system`, generic `shell=True`, `eval(`, `exec(`.
+- Rule-set YAML now supports two new backwards-compatible fields. Per-rule `target: bash | file-content` (default `bash`) selects which input the rule matches against — bash commands or written/edited file content. Per-rule-set `extensions: [.ext, ...]` (e.g. `['.ps1', '.psm1', '.psd1']`) gates file-content rules by file extension so the engine only evaluates Python rules against `.py` files, PowerShell rules against `.ps1` files, etc. Existing rule sets need no changes; they continue to behave as bash-only.
+- Broad Bash allowlists like `Bash(python3 *)` or `Bash(pwsh *)` are now viable in your Claude Code permissions: with content-level matching in place, ClaudeWatch catches the destructive variants regardless of how the script reaches the shell, so blanket `Bash(...)` permission no longer means blanket trust of the script's contents.
+
+### Other
+- `SPEC.md` and `docs/schema.md` document the new requirements (`EN-12`/`EN-13` for Write/Edit handling, `RL-10..13` for `target`, `RS-07`/`RS-08` for `extensions`, `HK-01` updated for the `Write|Edit` matcher, `SH-08`/`SH-09` for the two new shipped rule sets) and the user-facing YAML schema for `target` and `extensions`.
+- Engine and rule-set test coverage extended to exercise target dispatch (bash-only, file-only, default), extension gating with case-insensitive matching, Edit content reconstruction with and without an on-disk file (including `replace_all`), invalid-target diagnostics, and silent handling of unsupported tool names.
+
 ## 0.4.2
 
 ### Fixes
