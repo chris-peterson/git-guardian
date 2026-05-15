@@ -1,0 +1,108 @@
+name: watch-pwsh
+filter: '\b(pwsh|powershell)\b'
+extensions: ['.ps1', '.psm1', '.psd1']
+
+rules:
+  block:
+    - name: Format-Volume (bash)
+      pattern: '\bFormat-Volume\b'
+      target: bash
+      reason: wipes a volume's filesystem
+      ref: https://learn.microsoft.com/en-us/powershell/module/storage/format-volume
+    - name: Format-Volume (file)
+      pattern: '\bFormat-Volume\b'
+      target: file-content
+      reason: wipes a volume's filesystem
+      ref: https://learn.microsoft.com/en-us/powershell/module/storage/format-volume
+
+    - name: Clear-Disk (bash)
+      pattern: '\bClear-Disk\b'
+      target: bash
+      reason: removes all partitions from a disk
+      ref: https://learn.microsoft.com/en-us/powershell/module/storage/clear-disk
+    - name: Clear-Disk (file)
+      pattern: '\bClear-Disk\b'
+      target: file-content
+      reason: removes all partitions from a disk
+      ref: https://learn.microsoft.com/en-us/powershell/module/storage/clear-disk
+
+    - name: Restart-Computer (bash)
+      pattern: '\bRestart-Computer\b'
+      target: bash
+      reason: forces a system restart
+      ref: https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.management/restart-computer
+    - name: Restart-Computer (file)
+      pattern: '\bRestart-Computer\b'
+      target: file-content
+      reason: forces a system restart
+      ref: https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.management/restart-computer
+
+    - name: Stop-Computer (bash)
+      pattern: '\bStop-Computer\b'
+      target: bash
+      reason: forces a system shutdown
+      ref: https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.management/stop-computer
+    - name: Stop-Computer (file)
+      pattern: '\bStop-Computer\b'
+      target: file-content
+      reason: forces a system shutdown
+      ref: https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.management/stop-computer
+
+    - name: IWR piped to iex (bash)
+      pattern: '\b(Invoke-WebRequest|iwr)\b.*\|\s*(Invoke-Expression|iex)\b'
+      target: bash
+      reason: executes arbitrary code fetched from the network (curl|sh equivalent)
+      ref: https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.utility/invoke-expression
+    - name: IWR piped to iex (file)
+      pattern: '\b(Invoke-WebRequest|iwr)\b.*\|\s*(Invoke-Expression|iex)\b'
+      target: file-content
+      reason: executes arbitrary code fetched from the network (curl|sh equivalent)
+      ref: https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.utility/invoke-expression
+
+    - name: Remove-Item -Recurse -Force (file)
+      pattern: '\bRemove-Item\b.*-Recurse.*-Force|\bRemove-Item\b.*-Force.*-Recurse'
+      target: file-content
+      reason: recursive force-delete in a checked-in or persisted script
+      ref: https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.management/remove-item
+
+  ask:
+    - name: Remove-Item -Recurse -Force (bash)
+      pattern: '\bRemove-Item\b.*-Recurse.*-Force|\bRemove-Item\b.*-Force.*-Recurse'
+      target: bash
+      except: '(~/\.cache/|/tmp/|/var/tmp/)'
+      reason: recursive force-delete (allowed for cache/temp paths)
+      ref: https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.management/remove-item
+
+    - name: Remove-Item (bash)
+      pattern: '\bRemove-Item\b'
+      target: bash
+      except: '(~/\.cache/|/tmp/|/var/tmp/)'
+      reason: deletes files or directories
+      ref: https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.management/remove-item
+    - name: Remove-Item (file)
+      pattern: '\bRemove-Item\b'
+      target: file-content
+      reason: deletes files or directories
+      ref: https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.management/remove-item
+
+    - name: Stop-Process -Force (bash)
+      pattern: '\bStop-Process\b.*-Force\b'
+      target: bash
+      reason: force-terminates a process
+      ref: https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.management/stop-process
+    - name: Stop-Process -Force (file)
+      pattern: '\bStop-Process\b.*-Force\b'
+      target: file-content
+      reason: force-terminates a process
+      ref: https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.management/stop-process
+
+    - name: Out-File / Set-Content to sensitive paths (bash)
+      pattern: '\b(Out-File|Set-Content)\b.*(/etc/|~/\.ssh/|~/\.aws/|~/\.kube/|~/\.gnupg/)'
+      target: bash
+      reason: overwrites a sensitive system or credential file
+      ref: https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.utility/out-file
+    - name: Out-File / Set-Content to sensitive paths (file)
+      pattern: '\b(Out-File|Set-Content)\b.*(/etc/|~/\.ssh/|~/\.aws/|~/\.kube/|~/\.gnupg/)'
+      target: file-content
+      reason: overwrites a sensitive system or credential file
+      ref: https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.utility/out-file

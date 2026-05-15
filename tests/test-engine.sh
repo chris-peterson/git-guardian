@@ -96,6 +96,122 @@ run_test "$SCRIPT_DIR/../rules/watch-installs.yml" "git push (install rules)" al
   '{"tool_name":"Bash","tool_input":{"command":"git push origin main"}}'
 
 echo ""
+echo "=== target dispatch (bash vs file-content) ==="
+
+TMPDIR_TARGETS=$(mktemp -d)
+
+cat > "$TMPDIR_TARGETS/watch-target.yml" <<'YAMLEOF'
+name: watch-target
+filter: '\bfoo\b'
+extensions: ['.foo']
+
+rules:
+  block:
+    - name: bash-only block
+      pattern: 'destroy-bash'
+      target: bash
+      reason: bash block rule fired
+      ref: n/a
+    - name: file-content-only block
+      pattern: 'destroy-file'
+      target: file-content
+      reason: file-content block rule fired
+      ref: n/a
+  ask:
+    - name: default-target ask
+      pattern: 'ask-default'
+      reason: default target should be bash
+      ref: n/a
+YAMLEOF
+
+echo "--- bash input runs only target=bash rules ---"
+run_test "$TMPDIR_TARGETS/watch-target.yml" "bash rule fires on bash input" block \
+  '{"tool_name":"Bash","tool_input":{"command":"foo destroy-bash"}}'
+run_test "$TMPDIR_TARGETS/watch-target.yml" "file-content rule skipped on bash input" allow \
+  '{"tool_name":"Bash","tool_input":{"command":"foo destroy-file"}}'
+
+echo "--- omitted target defaults to bash ---"
+run_test "$TMPDIR_TARGETS/watch-target.yml" "default target is bash" ask \
+  '{"tool_name":"Bash","tool_input":{"command":"foo ask-default"}}'
+
+echo "--- Write input runs only target=file-content rules ---"
+run_test "$TMPDIR_TARGETS/watch-target.yml" "file-content rule fires on Write" block \
+  '{"tool_name":"Write","tool_input":{"file_path":"x.foo","content":"destroy-file here"}}'
+run_test "$TMPDIR_TARGETS/watch-target.yml" "bash rule skipped on Write" allow \
+  '{"tool_name":"Write","tool_input":{"file_path":"x.foo","content":"destroy-bash here"}}'
+
+echo "--- extensions gate file-content rules ---"
+run_test "$TMPDIR_TARGETS/watch-target.yml" "non-matching extension skipped" allow \
+  '{"tool_name":"Write","tool_input":{"file_path":"x.bar","content":"destroy-file"}}'
+run_test "$TMPDIR_TARGETS/watch-target.yml" "case-insensitive extension match" block \
+  '{"tool_name":"Write","tool_input":{"file_path":"x.FOO","content":"destroy-file"}}'
+
+echo "--- rule set without extensions ignores file-content rules ---"
+cat > "$TMPDIR_TARGETS/no-extensions.yml" <<'YAMLEOF'
+name: no-extensions
+rules:
+  block:
+    - name: file-content-without-extensions
+      pattern: 'destroy-file'
+      target: file-content
+      reason: should not fire — rule set has no extensions
+      ref: n/a
+YAMLEOF
+run_test "$TMPDIR_TARGETS/no-extensions.yml" "missing extensions = no file-content eval" allow \
+  '{"tool_name":"Write","tool_input":{"file_path":"x.anything","content":"destroy-file"}}'
+
+echo "--- filter gates bash-target only ---"
+run_test "$TMPDIR_TARGETS/watch-target.yml" "bash filter skips non-matching" allow \
+  '{"tool_name":"Bash","tool_input":{"command":"destroy-bash without keyword"}}'
+run_test "$TMPDIR_TARGETS/watch-target.yml" "filter does not gate file-content" block \
+  '{"tool_name":"Write","tool_input":{"file_path":"x.foo","content":"destroy-file without filter keyword"}}'
+
+echo "--- invalid target blocks ---"
+cat > "$TMPDIR_TARGETS/bad-target.yml" <<'YAMLEOF'
+name: bad-target
+filter: '.'
+rules:
+  block:
+    - name: bogus target
+      pattern: 'anything'
+      target: bogus
+      reason: invalid target value
+      ref: n/a
+YAMLEOF
+run_test "$TMPDIR_TARGETS/bad-target.yml" "invalid target value blocks" block \
+  '{"tool_name":"Bash","tool_input":{"command":"anything"}}'
+
+echo "--- Edit reconstructs full post-edit content ---"
+TMPFILE_EDIT=$(mktemp "$TMPDIR_TARGETS/script.XXXXXX.foo")
+cat > "$TMPFILE_EDIT" <<'EOF'
+benign code here
+no-op placeholder
+more benign code
+EOF
+run_test "$TMPDIR_TARGETS/watch-target.yml" "edit introduces match in full content" block \
+  "$(printf '{"tool_name":"Edit","tool_input":{"file_path":"%s","old_string":"no-op placeholder","new_string":"destroy-file the world"}}' "$TMPFILE_EDIT")"
+run_test "$TMPDIR_TARGETS/watch-target.yml" "edit leaves benign content benign" allow \
+  "$(printf '{"tool_name":"Edit","tool_input":{"file_path":"%s","old_string":"no-op placeholder","new_string":"still benign"}}' "$TMPFILE_EDIT")"
+
+echo "--- Edit on missing file falls back to new_string ---"
+run_test "$TMPDIR_TARGETS/watch-target.yml" "missing-file edit matches new_string" block \
+  '{"tool_name":"Edit","tool_input":{"file_path":"/no/such/path.foo","old_string":"","new_string":"destroy-file"}}'
+
+echo "--- Edit replace_all replaces every occurrence ---"
+TMPFILE_REPLACE=$(mktemp "$TMPDIR_TARGETS/multi.XXXXXX.foo")
+printf 'X token\nX token\nY here\n' > "$TMPFILE_REPLACE"
+run_test "$TMPDIR_TARGETS/watch-target.yml" "replace_all reconstructs every match" block \
+  "$(printf '{"tool_name":"Edit","tool_input":{"file_path":"%s","old_string":"token","new_string":"destroy-file","replace_all":true}}' "$TMPFILE_REPLACE")"
+
+echo "--- unsupported tool names exit silently ---"
+run_test "$TMPDIR_TARGETS/watch-target.yml" "Read tool produces no output" allow \
+  '{"tool_name":"Read","tool_input":{"file_path":"anything"}}'
+run_test "$TMPDIR_TARGETS/watch-target.yml" "Grep tool produces no output" allow \
+  '{"tool_name":"Grep","tool_input":{"pattern":"destroy-file"}}'
+
+rm -rf "$TMPDIR_TARGETS"
+
+echo ""
 echo "=== directory mode ==="
 run_test "$RULES_DIR" "git block (dir)"     block '{"tool_name":"Bash","tool_input":{"command":"git push --force origin main"}}'
 run_test "$RULES_DIR" "git ask (dir)"       ask   '{"tool_name":"Bash","tool_input":{"command":"git commit -m \"test\""}}'
